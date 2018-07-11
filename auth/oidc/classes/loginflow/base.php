@@ -362,7 +362,7 @@ class base {
         }
 
         // Use 'oid' if available (Azure-specific), or fall back to standard "sub" claim.
-        $oidcuniqid = $idtoken->claim('oid');
+        $oidcuniqid = $idtoken->claim('cognito:username');
         if (empty($oidcuniqid)) {
             $oidcuniqid = $idtoken->claim('sub');
         }
