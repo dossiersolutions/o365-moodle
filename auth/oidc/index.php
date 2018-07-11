@@ -24,6 +24,11 @@
 require_once(__DIR__.'/../../config.php');
 require_once(__DIR__.'/auth.php');
 
+global $SESSION;
+
+$SESSION->wantsurl = filter_input(INPUT_GET, 'wantsurl');
+//error_log("0. wantsurl=" . $wantsurl, 0);
+
 $auth = new \auth_plugin_oidc('authcode');
 $auth->set_httpclient(new \auth_oidc\httpclient());
 $auth->handleredirect();

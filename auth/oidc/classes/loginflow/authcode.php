@@ -90,11 +90,17 @@ class authcode extends \auth_oidc\loginflow\base {
      * @return mixed Determined by loginflow.
      */
     public function handleredirect() {
+	    global $SESSION;
         $state = $this->getoidcparam('state');
         $code = $this->getoidcparam('code');
         $promptlogin = (bool)optional_param('promptlogin', 0, PARAM_BOOL);
         $promptaconsent = (bool)optional_param('promptaconsent', 0, PARAM_BOOL);
         $justauth = (bool)optional_param('justauth', 0, PARAM_BOOL);
+	    $wantsurl = filter_input(INPUT_GET, 'wantsurl');
+        if (!empty($wantsurl)) {
+            $SESSION->wantsurl = $wantsurl;
+        }
+
         if (!empty($state)) {
             $requestparams = [
                 'state' => $state,
@@ -105,11 +111,19 @@ class authcode extends \auth_oidc\loginflow\base {
             $this->handleauthresponse($requestparams);
         } else {
             if (isloggedin() && empty($justauth) && empty($promptaconsent)) {
-                redirect(new \moodle_url('/'));
+            error_log("3. ", 0);
+            if (!empty($wantsurl)) {
+                redirect(new \moodle_url($wantsurl));
+                } else {
+                        redirect(new \moodle_url('/'));
+            }
                 die();
             }
             // Initial login request.
             $stateparams = ['forceflow' => 'authcode'];
+	        if (!empty($SESSION->wantsurl)) {
+                $stateparams['wantsurl'] = $SESSION->wantsurl;
+            }
             $extraparams = [];
             if ($promptaconsent === true) {
                 $extraparams = ['prompt' => 'admin_consent'];
@@ -160,7 +174,7 @@ class authcode extends \auth_oidc\loginflow\base {
      * @param array $authparams Received parameters.
      */
     protected function handleauthresponse(array $authparams) {
-        global $DB, $CFG, $STATEADDITIONALDATA, $USER;
+        global $DB, $CFG, $STATEADDITIONALDATA, $USER, $SESSION;
 
         if (!empty($authparams['error_description'])) {
             \auth_oidc\utils::debug('Authorization error.', 'authcode::handleauthresponse', $authparams);
@@ -191,6 +205,12 @@ class authcode extends \auth_oidc\loginflow\base {
             }
         }
         $STATEADDITIONALDATA = $additionaldata;
+	    if (!empty($additionaldata['wantsurl'])) {
+            $SESSION->wantsurl = $additionaldata['wantsurl'];
+	        error_log('additional: ' . $additionaldata['wantsurl'], 0);
+	        error_log('additional: SESS ' . $SESSION->wantsurl, 0);
+        }
+
         $DB->delete_records('auth_oidc_state', ['id' => $staterec->id]);
 
         // Get token from auth code.
@@ -229,6 +249,9 @@ class authcode extends \auth_oidc\loginflow\base {
         $tokenrec = $DB->get_record('auth_oidc_token', ['oidcuniqid' => $oidcuniqid]);
         if (isloggedin() === true && (empty($tokenrec) || (isset($USER->auth) && $USER->auth !== 'oidc'))) {
 
+		    $wantsurl = filter_input(INPUT_GET, 'wantsurl');
+            error_log("Logged in. wantsurl=" . $wantsurl, 0);
+
             // If user is already logged in and trying to link Office 365 account or use it for OIDC.
             // Check if that Office 365 account already exists in moodle.
             $userrec = $DB->count_records_sql('SELECT COUNT(*)
@@ -259,7 +282,13 @@ class authcode extends \auth_oidc\loginflow\base {
         } else {
             // Otherwise it's a user logging in normally with OIDC.
             $this->handlelogin($oidcuniqid, $authparams, $tokenparams, $idtoken);
-            redirect(core_login_get_return_url());
+
+ 	        error_log('redirect $SESSION->wantsurl: ' . $SESSION->wantsurl, 0);
+            if (!empty($SESSION->wantsurl)) {
+		        redirect(new \moodle_url($SESSION->wantsurl));
+            } else {
+                redirect(core_login_get_return_url());
+            }
         }
     }
 
